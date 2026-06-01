@@ -2,7 +2,7 @@
 
 	import {Notyf} from 'notyf';
 
-	import {ref} from 'vue';
+	import {ref, onMounted, onBeforeUnmount} from 'vue';
 
 	const notyf = new Notyf();
 
@@ -21,6 +21,14 @@
 
 	// The submitForm() function handles the contact form submission
 	const submitForm = async () => {
+
+		// Ensure the user completes the reCAPTCHA challenge before submitting the form.
+        // Check if a reCAPTCHA token exists
+        // recaptchaToken.value - stores the verification token returned by Google reCAPTCHA
+		if(!recaptchaToken.value) {
+			notyf.error('Please verify that you are not a robot');
+			return;
+		}
 
 		// While the email is being sent, disable the button and change it text to "Sending..."
 		isLoading.value = true;
@@ -53,8 +61,61 @@
 			console.log(error);
 			isLoading.value = false;
 			noty.error("Failed to send message.")
+		} finally {
+			resetRecaptcha();
 		}
 	}
+	
+	/*reCAPTCHA Integration*/
+
+    const SITE_KEY = '6LfxSActAAAAAM-ahW_mzytvKqQOEgXjMtEQDRZH';  // Replace with your site key
+    const recaptchaContainer = ref(null);
+    const recaptchaWidgetId = ref(null);
+    const recaptchaToken = ref('');
+
+    function onRecaptchaSuccess(token) {
+        recaptchaToken.value = token;
+    }
+
+    function onRecaptchaExpired() {
+        recaptchaToken.value = '';
+    }
+
+    function renderRecaptcha() {
+        if (!window.grecaptcha) {
+            console.error('reCAPTCHA not loaded');
+            return;
+        }
+
+        recaptchaWidgetId.value = window.grecaptcha.render(recaptchaContainer.value, {
+            sitekey: SITE_KEY,
+            size: 'normal',
+            callback: onRecaptchaSuccess,
+            'expired-callback': onRecaptchaExpired,
+        });
+    }
+
+    function resetRecaptcha() {
+        if (recaptchaWidgetId.value !== null) {
+        	window.grecaptcha.reset(recaptchaWidgetId.value);
+        	recaptchaToken.value = '';
+        }
+    }
+
+    onMounted(() => {
+    const interval = setInterval(() => {
+        if (window.grecaptcha && window.grecaptcha.render) {
+            renderRecaptcha();
+            clearInterval(interval);
+        }
+    }, 100);
+
+      onBeforeUnmount(() => {
+          clearInterval(interval);
+      });
+  });	
+
+
 
 
 </script>
@@ -85,6 +146,11 @@
 	                        <a href="https://github.com/cbabbage0991" id="github"><i class="fab fa-github"></i></a>
 	                    </div>
 	                    <button type="submit" class="submit-btn pl-5 pr-5" :disabled="isLoading">{{isLoading ? "Sending..." : "Submit"}}</button>
+	                </div>
+
+	                <div class="d-flex justify-content-end mt-2">
+	                	<div ref="recaptchaContainer"></div>
+
 	                </div>
 	            </form>
 	            
